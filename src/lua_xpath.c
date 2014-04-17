@@ -25,6 +25,13 @@ typedef struct xpath_item_s {
 } xpath_item_t;
 
 
+static int xpath_loads(lua_State *L);
+static int xpath_loadfile(lua_State *L);
+static int xpath_select(lua_State *L);
+static int xpath_extract(lua_State *L);
+static int xpath_dump(lua_State *L);
+
+
 static luaL_Reg funcs[] = {
     { "loads", xpath_loads },
     { "loadfile", xpath_loadfile },
@@ -156,6 +163,11 @@ luaopen_xpath(lua_State *L)
     /* Pops a table from the stack and sets it as the new metatable for the
      * value at the given acceptable index */
     lua_setmetatable(L, -2); /* set module's metatable */
+
+    /* version string */
+    lua_pushstring(L, "_VERSION");
+    lua_pushstring(L, LUA_XPATH_VERSION);
+    lua_rawset(L, -3);
 
     return 1;
 }
