@@ -6,8 +6,8 @@
 #define LUA_XPATH_MT_NAME       "xpath_mt"
 
 
-#define LUA_XPATH_TYPE_TREE     1
-#define LUA_XPATH_TYPE_ITEM     2
+#define LUA_XPATH_TREE     1
+#define LUA_XPATH_ITEM     2
 
 
 typedef struct xpath_object_s {
@@ -24,12 +24,31 @@ typedef struct xpath_item_s {
     xpath_object_t object;
 } xpath_item_t;
 
+/* memory deallocation:
+ *
+ *  from manual of Lua 5.1
+ *
+ * * Userdata represent C values in Lua. A _full userdata_ represents a block of
+ *   memory. It is an object (like a table): you must create it, it can have its
+ *   own metatable, and you can detect when it is being collected (through
+ *   metamethod `__gc`). A _full userdata_ is only equal to itself (under raw
+ *   equality). When Lua collects a full userdata with a `gc` metamethod, Lua
+ *   calls the metamethod and marks the userdata as finalized. When this
+ *   userdata is collected again then Lua frees its corresponding memory.
+ *
+ * * At the end of each garbage-collection cycle, the finalizers for userdata
+ *   are called in _reverse order_ of their creation, among those collected in
+ *   that cycle. The userdata itself is freed only in the next
+ *   garbage-collection cycle.
+ */
+
 
 static int xpath_loads(lua_State *L);
 static int xpath_loadfile(lua_State *L);
 static int xpath_select(lua_State *L);
 static int xpath_extract(lua_State *L);
 static int xpath_dump(lua_State *L);
+static int xpath_object_gc(lua_State *L);
 
 
 static luaL_Reg funcs[] = {
@@ -73,7 +92,7 @@ xpath_loads(lua_State *L)
         return 2;
     }
 
-    tree->object.type = LUA_XPATH_TYPE_TREE;
+    tree->object.type = LUA_XPATH_TREE;
 
     /* reuse the already existent metatable 
      */
@@ -112,9 +131,10 @@ xpath_dump(lua_State *L)
 {
     xpath_object_t *object;
 
+
     object = (xpath_object_t *) lua_touserdata(L, -1);
 
-    if (object->type == LUA_XPATH_TYPE_TREE) {
+    if (object->type == LUA_XPATH_TREE) {
         lua_pushstring(L, "tree");
 
     } else {
@@ -122,6 +142,30 @@ xpath_dump(lua_State *L)
     }
 
     return 1;
+}
+
+
+static int
+xpath_object_gc(lua_State *L)
+{
+    xpath_object_t *object;
+
+
+    if (!lua_isuserdata(L, -1)) {
+        printf("__gc on no-userdata");
+        return 0;
+    }
+
+    object = (xpath_object_t *) lua_touserdata(L, -1);
+
+    if (object->type == LUA_XPATH_TREE) {
+        printf("__gc on tree called\n");
+
+    } else {
+        printf("__gc on item called\n");
+    }
+
+    return 0;
 }
 
 
@@ -146,6 +190,10 @@ create_metatable(lua_State *L)
     }
 
     lua_rawset(L, -3); /* set metatable's __index to this new table */
+
+    lua_pushstring(L, "__gc");
+    lua_pushcfunction(L, xpath_object_gc);
+    lua_rawset(L, -3); /* set metatable's __gc to xpath_object_gc */
 
     /* now the newly created metatable stays on the top of the stack */
 
