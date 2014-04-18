@@ -1,7 +1,8 @@
 
 AC_INIT([lua-xpath], [0.0.1], [Hungpu DU <alecdu@gmail.com>])
 AC_CONFIG_AUX_DIR([build-aux])
-AM_INIT_AUTOMAKE([-Wall -Werror])
+# automake options
+AM_INIT_AUTOMAKE([-Wall -Werror dist-zip no-dist-gzip])
 
 AC_MSG_NOTICE([configuring for $PACKAGE_NAME-$PACKAGE_VERSION])
 
