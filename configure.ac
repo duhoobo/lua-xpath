@@ -36,7 +36,6 @@ AM_PATH_XML2([2.9.0])   # higher or equals to, XML_CPPFLAGS, XML_LIBS
 
 AC_CONFIG_FILES([Makefile 
                  src/Makefile 
-                 rockspec/Makefile
                  rockspec/$PACKAGE.rockspec
                  tests/Makefile
                  ])

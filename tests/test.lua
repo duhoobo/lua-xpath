@@ -1,4 +1,4 @@
-package.cpath = "/home/duhoobo/prj/amateur/lua-xpath/src/?.so;" .. package.cpath
+--package.cpath = "/home/duhoobo/prj/amateur/lua-xpath/src/?.so;" .. package.cpath
 
 local xpath = require("xpath")
 
