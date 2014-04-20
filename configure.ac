@@ -9,14 +9,13 @@ AC_MSG_NOTICE([configuring for $PACKAGE_NAME-$PACKAGE_VERSION])
 
 AC_CONFIG_MACRO_DIR([m4])
 AM_CONFIG_HEADER(config.h)
-AC_DISABLE_STATIC
 
 
 AC_PROG_INSTALL
 AC_PROG_CC
 AC_PROG_SED
 AM_PROG_AR
-LT_INIT
+LT_INIT([disable-static shared])
 # by autoconf-archive
 AX_WITH_PROG([MD5SUM], [md5sum], [false])
 

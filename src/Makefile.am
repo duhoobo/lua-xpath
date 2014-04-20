@@ -2,7 +2,7 @@
 lib_LTLIBRARIES = xpath.la
 
 xpath_la_SOURCES = lua_xpath.c
-xpath_la_CPPFLAGS = $(LUA_INCLUDE) $(XML_CPPFLAGS)
+xpath_la_CPPFLAGS = $(LUA_INCLUDE) $(XML_CPPFLAGS) -DLUA_USE_APICHECK
 
 # -module: creates a library that can be dlopened, and module names don't need
 # to be prefixed with `lib`.
@@ -18,3 +18,6 @@ xpath.so: $(lib_LTLIBRARIES)
 # local version of `all`. automake will supplement the standard target with
 # these user-supplied targets.
 all-local: xpath.so
+
+
+EXTRA_DIST = lua_xpath.h
