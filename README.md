@@ -13,14 +13,14 @@ example
 
 
     -- load data from file
-    tree = xpath.loadfile(html)
+    selector = xpath.loadfile(html)
     -- load data from string
-    tree = xpath.loads("<html></html>")
+    selector = xpath.loads("<html></html>")
 
 
     ------------------ OOP style ----------------------------
 
-    items = tree:select("//div[@name='shit']")
+    items = selector:xpath("//div[@name='shit']")
 
     for k, v in ipairs(items) do
         print(v:extract())
@@ -29,7 +29,7 @@ example
 
     ------------------ general lua style --------------------
 
-    items = xpath.select(tree, "//div[@name='shit']")
+    items = xpath.select(selector, "//div[@name='shit']")
 
     for k, v in ipairs(items) do
         print(xpath.extract(v))
