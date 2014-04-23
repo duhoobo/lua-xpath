@@ -1,5 +1,5 @@
-#ifndef LUA_XPATH_H
-#define LUA_XPATH_H
+#ifndef __LUA_XPATH_H__
+#define __LUA_XPATH_H__
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -28,4 +28,4 @@
 LUALIB_API int luaopen_xpath(lua_State *L);
 
 
-#endif 
+#endif /* __LUA_XPATH_H__ */

@@ -2,7 +2,8 @@
 lib_LTLIBRARIES = xpath.la
 
 xpath_la_SOURCES = lua_xpath.c
-xpath_la_CPPFLAGS = $(LUA_INCLUDE) $(XML_CPPFLAGS) -DLUA_USE_APICHECK
+xpath_la_CPPFLAGS = $(LUA_INCLUDE) $(XML_CPPFLAGS) \
+                    -DLUA_USE_APICHECK -DDEBUG_LUA_XPATH
 
 # -module: creates a library that can be dlopened, and module names don't need
 # to be prefixed with `lib`.

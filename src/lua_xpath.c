@@ -18,23 +18,22 @@ typedef struct xpath_selector_s {
 } xpath_selector_t;
 
 
-/* memory deallocation:
- *
- *  from manual of Lua 5.1
- *
- * * Userdata represent C values in Lua. A _full userdata_ represents a block of
- *   memory. It is an object (like a table): you must create it, it can have its
- *   own metatable, and you can detect when it is being collected (through
- *   metamethod `__gc`). A _full userdata_ is only equal to itself (under raw
- *   equality). When Lua collects a full userdata with a `gc` metamethod, Lua
- *   calls the metamethod and marks the userdata as finalized. When this
- *   userdata is collected again then Lua frees its corresponding memory.
- *
- * * At the end of each garbage-collection cycle, the finalizers for userdata
- *   are called in _reverse order_ of their creation, among those collected in
- *   that cycle. The userdata itself is freed only in the next
- *   garbage-collection cycle.
- */
+static struct {
+    char const  *name;
+    int         accept;
+} __node_type[] = {
+    { "None",               0 },
+    { "Element",            1 },    /* XML_ELEMENT_NODE */
+    { "Attribute",          1 },    /* XML_ATTRIBUTE_NODE */
+    { "Text",               1 },    /* XML_TEXT_NODE */
+    { "CDATA",              0 },
+    { "EntityRef",          0 },
+    { "Entity",             0 },
+    { "PI",                 0 },
+    { "Comment",            0 },
+    { "Document",           0 },
+    /* TODO to be added */
+};
 
 
 static int xpath_loads(lua_State *L);
@@ -44,6 +43,7 @@ static int xpath_eval_regex(lua_State *L);
 static int xpath_eval_css(lua_State *L);
 static int xpath_extract(lua_State *L);
 static int xpath_dump(lua_State *L);
+static int xpath_tostring(lua_State *L);
 static int xpath_selector_gc(lua_State *L);
 
 
@@ -63,8 +63,16 @@ static luaL_Reg mt_funcs[] = {
 };
 
 
-#define __get_root(sel) ((sel)->root ? (sel)->root : (sel))
+#define __get_root(sel)     ((sel)->root ? (sel)->root : (sel))
+#define __get_type(sel)     (__node_type[(sel)->node->type].name)
+#define __get_name(sel)     ((char const *) (sel)->node->name)
+#define __get_ref(sel)      (__get_root(sel)->ref)
+#define __get_count(self)   (__get_root(sel)->count)
 
+
+#ifndef DEBUG_LUA_XPATH
+# define __selector_dump(sel, prefix) void
+#else
 
 static void
 __selector_dump(xpath_selector_t *sel, char const *prefix)
@@ -73,6 +81,7 @@ __selector_dump(xpath_selector_t *sel, char const *prefix)
     printf("%s: selector: name '%s', ref %d, count %d\n", prefix, 
         sel->node->name, root->ref, root->count);
 }
+#endif 
 
 
 static int
@@ -164,8 +173,7 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
 
             printf("node <%s>, type %d\n", node->name, node->type);
 
-            if (node->type == XML_TEXT_NODE || node->type == XML_ATTRIBUTE_NODE)
-            {
+            if (__node_type[node->type].accept) {
                 nodes[sel->tmp++] = node;
             }
         }
@@ -348,11 +356,19 @@ xpath_eval_xpath(lua_State *L)
 
 static int
 xpath_eval_regex(lua_State *L)
-{ return 0; }
+{ 
+    lua_pushnil(L);
+    lua_pushstring(L, "not implemented yet");
+    return 2; 
+}
 
 static int
 xpath_eval_css(lua_State *L)
-{ return 0; }
+{ 
+    lua_pushnil(L);
+    lua_pushstring(L, "not implemented yet");
+    return 2; 
+}
 
 
 static int
@@ -369,6 +385,24 @@ xpath_dump(lua_State *L)
     return 0;
 }
 
+
+/* memory deallocation:
+ *
+ *  from manual of Lua 5.1
+ *
+ * * Userdata represent C values in Lua. A _full userdata_ represents a block of
+ *   memory. It is an object (like a table): you must create it, it can have its
+ *   own metatable, and you can detect when it is being collected (through
+ *   metamethod `__gc`). A _full userdata_ is only equal to itself (under raw
+ *   equality). When Lua collects a full userdata with a `gc` metamethod, Lua
+ *   calls the metamethod and marks the userdata as finalized. When this
+ *   userdata is collected again then Lua frees its corresponding memory.
+ *
+ * * At the end of each garbage-collection cycle, the finalizers for userdata
+ *   are called in _reverse order_ of their creation, among those collected in
+ *   that cycle. The userdata itself is freed only in the next
+ *   garbage-collection cycle.
+ */
 static int
 xpath_selector_gc(lua_State *L)
 {
@@ -405,6 +439,29 @@ xpath_selector_gc(lua_State *L)
 
 
 static int
+xpath_tostring(lua_State *L)
+{
+    char brief[64];
+
+
+    if (lua_istable(L, 1)) {
+        snprintf(brief, sizeof(brief), "<module XPath>: %p", 
+            lua_topointer(L, 1));
+
+    } else {
+        xpath_selector_t *sel = lua_touserdata(L, 1);
+
+        snprintf(brief, sizeof(brief), "<selector %s '%s' r%d c%d>: %p",
+            __get_type(sel), __get_name(sel), __get_ref(sel), __get_count(sel),
+            lua_topointer(L, 1));
+    }
+
+    lua_pushstring(L, brief);
+    return 1;
+}
+
+
+static int
 create_metatable(lua_State *L)
 {
     luaL_reg *reg;
@@ -426,9 +483,15 @@ create_metatable(lua_State *L)
 
     lua_rawset(L, -3); /* set metatable's __index to this new table */
 
+    /* only act on userdata, that is, object of xpath_select_t  */
     lua_pushstring(L, "__gc");
     lua_pushcfunction(L, xpath_selector_gc);
     lua_rawset(L, -3); /* set metatable's __gc to xpath_selector_gc */
+
+    /* act both on selector and module xpath itself */
+    lua_pushstring(L, "__tostring");
+    lua_pushcfunction(L, xpath_tostring);
+    lua_rawset(L, -3); /* set metatable's __tostring to xpath_tostring */
 
     /* now the newly created metatable stays on the top of the stack */
 
