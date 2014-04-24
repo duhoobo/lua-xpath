@@ -205,7 +205,39 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
 static int 
 __extract_element_node(lua_State *L, xpath_selector_t *sel)
 {
-    return -1;
+    int len, ret = -1;
+    xmlBuffer *buffer = NULL;
+    xmlOutputBuffer *output = NULL;
+
+
+    do {
+        buffer = xmlBufferCreate();
+        if (buffer == NULL) {
+            break;
+        }
+
+        output = xmlOutputBufferCreateBuffer(buffer, NULL);
+        if (output == NULL) {
+            break;
+        }
+
+        xmlNodeDumpOutput(output, __get_root(sel)->doc, sel->node, 0, 0, NULL); 
+
+        len = xmlOutputBufferClose(output);
+        /* `output` is already released by `xmlOutputBuffer` */
+        output = NULL;
+
+        lua_pushlstring(L, buffer->content, len);
+        ret = 0;
+
+    } while (0);
+
+    if (buffer) {
+        xmlBufferFree(buffer);
+        buffer = NULL;
+    }
+
+    return ret;
 }
 
 
