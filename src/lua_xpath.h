@@ -8,6 +8,8 @@
 #include <libxml/xpath.h>
 #include <libxml/parserInternals.h>
 
+#include <stdint.h>
+
 
 
 #ifdef HAVE_CONFIG_H

@@ -37,7 +37,7 @@ function test_xpath()
         print(k, v)
     end
 
-    print "--- leave test_xpath ---\n"
+    print "\n--- leave test_xpath ---"
 end
 
 
@@ -72,7 +72,7 @@ function test_relative_xpath()
     end
         
 
-    print "--- leave test_relative_xpath ---\n"
+    print "\n--- leave test_relative_xpath ---"
 end
 
 
@@ -95,7 +95,7 @@ function test_re()
         return
     end
 
-    print "--- leave test_re ---\n"
+    print "\n--- leave test_re ---"
 end
 
 
@@ -118,7 +118,7 @@ function test_css()
         return
     end
 
-    print "--- leave test_css ---\n"
+    print "\n--- leave test_css ---"
 end
 
 
@@ -130,15 +130,62 @@ function test_tostring()
     local sel, err = xpath.loads(xml)
     print(sel, err)
 
-    print "--- leave test_tostring ---\n"
+    print "\n--- leave test_tostring ---"
+end
+
+
+function test_extract()
+    print "-- enter test_extract ---\n"
+
+    local sel, err = xpath.loads(xml)
+    if not sel then
+        print(sel, err)
+        return nil
+    end
+
+    -- text
+    local ls, err = sel:xpath("/html/body/name/text()")
+    if not ls then
+        print(sel, err)
+        return nil
+    end
+
+    for k, v in pairs(ls) do
+        print(k, v, v:extract())
+    end
+
+    -- attribute
+    local ls, err = sel:xpath("/html/body/name/@color")
+    if not ls then
+        print(sel, err)
+        return nil
+    end
+
+    for k, v in pairs(ls) do
+        print(k, v, v:extract())
+    end
+
+    -- element
+    local ls, err = sel:xpath("/html/body/name")
+    if not ls then
+        print(sel, err)
+        return nil
+    end
+
+    for k, v in pairs(ls) do
+        print(k, v, v:extract())
+    end
+
+    print "\n-- leave test_extract ---"
 end
 
 
 --test_xpath()
-test_relative_xpath()
+--test_relative_xpath()
 --test_re()
 --test_css()
 --test_tostring()
+test_extract()
 
 
 

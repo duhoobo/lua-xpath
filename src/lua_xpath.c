@@ -4,35 +4,45 @@
 
 #define LUA_XPATH_NAME          "xpath"
 #define LUA_XPATH_MT_NAME       "xpath_mt"
+#define LUA_XPATH_MAGIC         0x6870786C      /* "lxph" */
 
 
 typedef struct xpath_selector_s {
-    struct xpath_selector_s *root;
-    int                     ref;   /* lua reference, _root_ keeps it */
-    int                     count; /* refcount, _root_ keeps it */
-    xmlDoc                  *doc;  /* xml document tree, _root_ keeps it */
+    intptr_t                    magic;
+    struct xpath_selector_s     *root;
+    int                         ref;    /* lua reference, _root_ keeps it */
+    int                         count;  /* refcount, _root_ keeps it */
+    xmlDoc                      *doc;   /* xml document tree, _root_ keeps it */
 
-    xmlNode                 *node; /* current node */
+    xmlNode                     *node;  /* current node */
 
-    int                     tmp;
+    intptr_t                    tmp;    /* arbitrary */
 } xpath_selector_t;
 
 
+static int __extract_element_node(lua_State *L, xpath_selector_t *sel);
+static int __extract_attribute_node(lua_State *L, xpath_selector_t *sel);
+static int __extract_content_node(lua_State *L, xpath_selector_t *sel);
+
+typedef int (*extract_handler_pt) (lua_State *, xpath_selector_t *);
+
 static struct {
-    char const  *name;
-    int         accept;
+    char const          *name;
+    int                 accept;
+    extract_handler_pt  handler;
 } __node_type[] = {
-    { "None",               0 },
-    { "Element",            1 },    /* XML_ELEMENT_NODE */
-    { "Attribute",          1 },    /* XML_ATTRIBUTE_NODE */
-    { "Text",               1 },    /* XML_TEXT_NODE */
-    { "CDATA",              0 },
-    { "EntityRef",          0 },
-    { "Entity",             0 },
-    { "PI",                 0 },
-    { "Comment",            0 },
-    { "Document",           0 },
+    { "None",       0, NULL },
+    { "Element",    1, __extract_element_node },     /* XML_ELEMENT_NODE */
+    { "Attribute",  1, __extract_attribute_node },   /* XML_ATTRIBUTE_NODE */
+    { "Text",       1, __extract_content_node },        /* XML_TEXT_NODE */
+    { "CDATA",      0, __extract_content_node },
+    { "EntityRef",  0, NULL },
+    { "Entity",     0, NULL },
+    { "PI",         0, NULL },
+    { "Comment",    0, __extract_content_node },
+    { "Document",   0, NULL },
     /* TODO to be added */
+    { NULL,         0, NULL }
 };
 
 
@@ -42,7 +52,6 @@ static int xpath_eval_xpath(lua_State *L);
 static int xpath_eval_regex(lua_State *L);
 static int xpath_eval_css(lua_State *L);
 static int xpath_extract(lua_State *L);
-static int xpath_dump(lua_State *L);
 static int xpath_tostring(lua_State *L);
 static int xpath_selector_gc(lua_State *L);
 
@@ -58,16 +67,16 @@ static luaL_Reg mt_funcs[] = {
     { "re",         xpath_eval_regex },
     { "css",        xpath_eval_css },
     { "extract",    xpath_extract },
-    { "dump",       xpath_dump },
     { NULL,         NULL }
 };
 
 
-#define __get_root(sel)     ((sel)->root ? (sel)->root : (sel))
-#define __get_type(sel)     (__node_type[(sel)->node->type].name)
-#define __get_name(sel)     ((char const *) (sel)->node->name)
-#define __get_ref(sel)      (__get_root(sel)->ref)
-#define __get_count(self)   (__get_root(sel)->count)
+#define __get_root(sel)         ((sel)->root ? (sel)->root : (sel))
+#define __get_type(sel)         ((sel)->node->type)
+#define __get_type_name(sel)    (__node_type[(sel)->node->type].name)
+#define __get_node_name(sel)    ((char const *) (sel)->node->name)
+#define __get_ref(sel)          (__get_root(sel)->ref)
+#define __get_count(self)       (__get_root(sel)->count)
 
 
 #ifndef DEBUG_LUA_XPATH
@@ -193,6 +202,55 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
 }
 
 
+static int 
+__extract_element_node(lua_State *L, xpath_selector_t *sel)
+{
+    return -1;
+}
+
+
+static int 
+__extract_attribute_node(lua_State *L, xpath_selector_t *sel)
+{
+    xmlChar *value;
+    xmlNode *node = sel->node;
+
+
+    if (node->ns && node->ns->href) {
+        value = xmlGetNsProp(node->parent, node->name, node->ns->href);
+        
+    } else {
+        value = xmlGetNoNsProp(node->parent, node->name);
+    }
+
+    if (value == NULL) {
+        return -1;
+    }
+
+    /* pushes the zero-terminated string pointed to by `s` onto the stack. Lua
+     * makes (or reuse) an internal copy of the given string, so the memory at
+     * `s` can be freed or reused immediately after the function returns. the
+     * string connot contain embedded zeros; it is assumed to end at the frist
+     * zero.
+     */
+    lua_pushstring(L, (char const *) value);
+
+    xmlFree(value);
+
+    return 0;
+}
+
+
+static int 
+__extract_content_node(lua_State *L, xpath_selector_t *sel)
+{
+    (void ) sel;
+
+    lua_pushstring(L, sel->node->content ? (char const *) sel->node->content : "");
+
+    return 0;
+}
+
 
 /*
  * @params string
@@ -219,6 +277,7 @@ xpath_loads(lua_State *L)
     sel = (xpath_selector_t *) lua_newuserdata(L, sizeof(*sel));
 
     /* fields initialization */
+    sel->magic = LUA_XPATH_MAGIC;
     sel->root = NULL;
     sel->ref = 0;
     sel->count = 0;
@@ -325,7 +384,7 @@ xpath_eval_xpath(lua_State *L)
     /* a list of `selector` object */
     lua_createtable(L, sel->tmp, 0);
 
-    printf("found %d elements\n", sel->tmp);
+    printf("found %d elements\n", (int) sel->tmp);
 
     for (i = 0; i < sel->tmp; i++) {
         /* note lua table's base index */
@@ -338,6 +397,7 @@ xpath_eval_xpath(lua_State *L)
         luaL_newmetatable(L, LUA_XPATH_MT_NAME);
         lua_setmetatable(L, -2);
 
+        node->magic = LUA_XPATH_MAGIC;
         node->root = __get_root(sel);
         node->ref = 0;
         node->count = 0;
@@ -374,15 +434,35 @@ xpath_eval_css(lua_State *L)
 static int
 xpath_extract(lua_State *L)
 {
-    return 0;
-}
-
-static int
-xpath_dump(lua_State *L)
-{
     xpath_selector_t *sel;
 
-    return 0;
+
+    if (!lua_isuserdata(L, 1)) {
+        lua_pushnil(L);
+        lua_pushstring(L, "selector object needed");
+        return 2;
+    }
+
+    sel = (xpath_selector_t *) lua_touserdata(L, 1);
+    if (sel->magic != LUA_XPATH_MAGIC) {
+        lua_pushnil(L);
+        lua_pushstring(L, "magic number mismatch");
+        return 2;
+    }
+
+    if (!__node_type[__get_type(sel)].handler) {
+        lua_pushnil(L);
+        lua_pushstring(L, "node type not supported");
+        return 2;
+    }
+    
+    if (__node_type[__get_type(sel)].handler(L, sel) == -1) {
+        lua_pushnil(L);
+        lua_pushstring(L, "extract error");
+        return 2;
+    }
+
+    return 1;
 }
 
 
@@ -452,8 +532,8 @@ xpath_tostring(lua_State *L)
         xpath_selector_t *sel = lua_touserdata(L, 1);
 
         snprintf(brief, sizeof(brief), "<selector %s '%s' r%d c%d>: %p",
-            __get_type(sel), __get_name(sel), __get_ref(sel), __get_count(sel),
-            lua_topointer(L, 1));
+            __get_type_name(sel), __get_node_name(sel), __get_ref(sel), 
+            __get_count(sel), lua_topointer(L, 1));
     }
 
     lua_pushstring(L, brief);
