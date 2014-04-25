@@ -649,7 +649,7 @@ xpath_tostring(lua_State *L)
             lua_topointer(L, 1));
 
     } else {
-        xpath_selector_t *sel = lua_touserdata(L, 1);
+        xpath_selector_t *sel = luaL_checkudata(L, 1, LUA_XPATH_MT_NAME);
 
         snprintf(brief, sizeof(brief), "<selector %s '%s' r%d c%d>: %p",
             __get_type_name(sel), __get_node_name(sel), __get_ref(sel), 
