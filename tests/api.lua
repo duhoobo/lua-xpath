@@ -176,7 +176,40 @@ function test_extract()
         print(k, v, v:extract())
     end
 
-    print "\n-- leave test_extract ---"
+    print "\n--- leave test_extract ---"
+end
+
+
+function test_error() 
+    print "--- enter test_error ---\n"
+
+    local xml = [[
+    <html>
+      <head></head> 
+      <body> 
+        <name>alec</name>
+        <name>yang</name>
+      </body>
+    </html>]]
+
+
+    local sel, err = xpath.loads(xml)
+    if not sel then
+        print(sel, err)
+        return nil
+    end
+
+    local ls, err = xpath.xpath(sel, "/html/body/name")
+    if not ls then
+        print(ls, err)
+        return nil
+    end
+
+    for k, v in pairs(ls) do
+        print(k, xpath.extract(v))
+    end
+
+    print "\n--- leave test_error ---"
 end
 
 
@@ -185,7 +218,8 @@ end
 --test_re()
 --test_css()
 --test_tostring()
-test_extract()
+--test_extract()
+test_error()
 
 
 

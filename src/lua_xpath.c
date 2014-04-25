@@ -34,7 +34,7 @@ static struct {
     { "None",       0, NULL },
     { "Element",    1, __extract_element_node },     /* XML_ELEMENT_NODE */
     { "Attribute",  1, __extract_attribute_node },   /* XML_ATTRIBUTE_NODE */
-    { "Text",       1, __extract_content_node },        /* XML_TEXT_NODE */
+    { "Text",       1, __extract_content_node },     /* XML_TEXT_NODE */
     { "CDATA",      0, __extract_content_node },
     { "EntityRef",  0, NULL },
     { "Entity",     0, NULL },
@@ -80,38 +80,107 @@ static luaL_Reg mt_funcs[] = {
 
 
 #ifndef DEBUG_LUA_XPATH
-# define __selector_dump(sel, prefix) void
+# define __dump_selector(sel, prefix) void
+
+static void
+__libxml2_error_handler(void *ctxt, char const *fmt, ...)
+{
+    return;
+}
+
+# define __dump_xmlnode(node, prefix) void
+
 #else
 
 static void
-__selector_dump(xpath_selector_t *sel, char const *prefix)
+__dump_selector(xpath_selector_t *sel, char const *prefix)
 {
-    xpath_selector_t *root = __get_root(sel);
-    printf("%s: selector: name '%s', ref %d, count %d\n", prefix, 
-        sel->node->name, root->ref, root->count);
+    fprintf(stderr, "%s: selector: name '%s', type '%s', ref %d, count %d\n", 
+        prefix ? prefix : "sd", __get_node_name(sel), __get_type_name(sel), 
+        __get_ref(sel), __get_count(sel));
 }
+
+static void
+__dump_xmlnode(xmlNode *node, char const *prefix)
+{
+    fprintf(stderr, "%s: node '%s', type %d\n", 
+        prefix ? prefix : "xd", node->name, node->type);
+}
+
+static void
+__libxml2_error_handler(void *ctxt, char const *fmt, ...)
+{
+    return;
+}
+
 #endif 
+
+
+static void
+__library_init()
+{
+    /* initialization function for the XML parser. this is not reentrant. call
+     * once before processing in case of use in multithreaded programs.
+     */
+    xmlInitParser();
+
+    xmlThrDefSetGenericErrorFunc(NULL, __libxml2_error_handler);
+    xmlSetGenericErrorFunc(NULL, __libxml2_error_handler);
+}
+
+
+static void
+__set_error(xpath_selector_t *sel, xmlError const *err, char const *def)
+{
+    if (err == NULL) {
+        sel->tmp = (intptr_t) def;
+        return;
+    } 
+
+    if (err->message && *err->message != '\0') {
+        sel->tmp = (intptr_t) err->message;
+    } else {
+        sel->tmp = (intptr_t) def;
+    }
+}
+
+
+static char const *
+__get_error(xpath_selector_t *sel, char const *def)
+{
+    char *err = (char *) sel->tmp;
+    return err ? err : def;
+}
 
 
 static int
 __parse_string(xpath_selector_t *sel, char const *buf, 
     size_t len)
 {
+    xmlError *err;
     xmlParserCtxt *ctxt;
    
 
+    xmlResetLastError();
+    sel->tmp = (intptr_t) NULL;
+
     ctxt = xmlCreateMemoryParserCtxt(buf, len);
     if (ctxt == NULL) {
+        __set_error(sel, xmlGetLastError(), "create parser error");
+
         return -1;
     }
 
     if (xmlParseDocument(ctxt) == -1) {
+        __set_error(sel, xmlCtxtGetLastError(ctxt), "parser error");
         xmlFreeParserCtxt(ctxt);
+
         return -1;
     }
 
     sel->node = xmlDocGetRootElement(ctxt->myDoc);
     if (sel->node == NULL) {
+        __set_error(sel, NULL, "no root element");
         xmlFreeDoc(ctxt->myDoc);
         xmlFreeParserCtxt(ctxt);
 
@@ -132,13 +201,12 @@ __parse_file(xpath_selector_t *sel, char const *fname)
 {
     xmlParserCtxt *ctxt = xmlCreateFileParserCtxt(fname);
     xmlFreeParserCtxt(ctxt);
-
     return 0;
 }
 
 
 static void **
-__eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
+__eval_xpath(lua_State *L, xpath_selector_t *sel, char const *xpath)
 {
     int i;
     xmlXPathObject *result = NULL;
@@ -147,23 +215,27 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
     
 
     do {
-        /* used to save children number */
+        xmlResetLastError();
+        /* used to save children number or error message */
         sel->tmp = 0;
 
         ctxt = xmlXPathNewContext(__get_root(sel)->doc);
         if (ctxt == NULL) {
+            __set_error(sel, NULL, "create xpath context error");
             break;
         }
 
         /* the current node */
         ctxt->node = sel->node;
 
-        result = xmlXPathEval((xmlChar const *) rule, ctxt);
+        result = xmlXPathEval((xmlChar const *) xpath, ctxt);
         if (result == NULL) {
+            __set_error(sel, NULL, "invalid xpath");
             break;
         }
 
         if (result->type != XPATH_NODESET) {
+            __set_error(sel, NULL, "only nodeset result supported");
             break;
         }
 
@@ -180,7 +252,7 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *rule)
         for (i = 0; i < result->nodesetval->nodeNr; i++) {
             xmlNode *node = result->nodesetval->nodeTab[i];
 
-            printf("node <%s>, type %d\n", node->name, node->type);
+            __dump_xmlnode(node, "eval");
 
             if (__node_type[node->type].accept) {
                 nodes[sel->tmp++] = node;
@@ -211,13 +283,18 @@ __extract_element_node(lua_State *L, xpath_selector_t *sel)
 
 
     do {
+        xmlResetLastError();
+        sel->tmp = (intptr_t) NULL;
+
         buffer = xmlBufferCreate();
         if (buffer == NULL) {
+            __set_error(sel, NULL, "create buffer error");
             break;
         }
 
         output = xmlOutputBufferCreateBuffer(buffer, NULL);
         if (output == NULL) {
+            __set_error(sel, NULL, "create output error");
             break;
         }
 
@@ -231,6 +308,7 @@ __extract_element_node(lua_State *L, xpath_selector_t *sel)
         ret = 0;
 
     } while (0);
+
 
     if (buffer) {
         xmlBufferFree(buffer);
@@ -248,6 +326,9 @@ __extract_attribute_node(lua_State *L, xpath_selector_t *sel)
     xmlNode *node = sel->node;
 
 
+    xmlResetLastError();
+    sel->tmp = (intptr_t) NULL;
+
     if (node->ns && node->ns->href) {
         value = xmlGetNsProp(node->parent, node->name, node->ns->href);
         
@@ -256,6 +337,7 @@ __extract_attribute_node(lua_State *L, xpath_selector_t *sel)
     }
 
     if (value == NULL) {
+        __set_error(sel, NULL, "no value found");
         return -1;
     }
 
@@ -277,7 +359,6 @@ static int
 __extract_content_node(lua_State *L, xpath_selector_t *sel)
 {
     (void ) sel;
-
     lua_pushstring(L, sel->node->content ? (char const *) sel->node->content : "");
 
     return 0;
@@ -318,7 +399,7 @@ xpath_loads(lua_State *L)
 
     if (__parse_string(sel, input, length) == -1) {
         lua_pushnil(L);
-        lua_pushstring(L, "xml string parsing error");
+        lua_pushstring(L, __get_error(sel, "parser error"));
         return 2;
     }
 
@@ -382,12 +463,18 @@ xpath_eval_xpath(lua_State *L)
     int i;
     size_t length;
     void **nodes;
-    const char *rule;
+    const char *xpath;
     xpath_selector_t *sel, *node;
 
 
+    if (!lua_isuserdata(L, 1)) {
+        lua_pushnil(L);
+        lua_pushstring(L, "first arg should be selector object");
+        return 2;
+    }
+
     sel = (xpath_selector_t *) lua_touserdata(L, 1);
-    if (sel == NULL) {
+    if (sel->magic != LUA_XPATH_MAGIC) {
         lua_pushnil(L);
         lua_pushstring(L, "selector object needed");
         return 2;
@@ -399,24 +486,22 @@ xpath_eval_xpath(lua_State *L)
      * there is no guarantee that the pointer returned by `lua_tolstring` will
      * be valid after the correponding value is removed from the stack.
      */
-    rule = luaL_optlstring(L, 2, NULL, &length);
-    if (rule == NULL || length == 0) {
+    xpath = luaL_optlstring(L, 2, NULL, &length);
+    if (xpath == NULL || length == 0) {
         lua_pushnil(L);
         lua_pushstring(L, "xpath pattern needed");
         return 2;
     }
 
-    nodes = (void **) __eval_xpath(L, sel, rule);
+    nodes = (void **) __eval_xpath(L, sel, xpath);
     if (nodes == NULL) {
         lua_pushnil(L);
-        lua_pushstring(L, "xpath eval error");
+        lua_pushstring(L, __get_error(sel, "eval xpath error"));
         return 2;
     }
 
     /* a list of `selector` object */
     lua_createtable(L, sel->tmp, 0);
-
-    printf("found %d elements\n", (int) sel->tmp);
 
     for (i = 0; i < sel->tmp; i++) {
         /* note lua table's base index */
@@ -471,16 +556,18 @@ xpath_extract(lua_State *L)
 
     if (!lua_isuserdata(L, 1)) {
         lua_pushnil(L);
-        lua_pushstring(L, "selector object needed");
+        lua_pushstring(L, "first arg should be selector object");
         return 2;
     }
 
     sel = (xpath_selector_t *) lua_touserdata(L, 1);
     if (sel->magic != LUA_XPATH_MAGIC) {
         lua_pushnil(L);
-        lua_pushstring(L, "magic number mismatch");
+        lua_pushstring(L, "selector object needed");
         return 2;
     }
+
+    __dump_selector(sel, NULL);
 
     if (!__node_type[__get_type(sel)].handler) {
         lua_pushnil(L);
@@ -490,7 +577,7 @@ xpath_extract(lua_State *L)
     
     if (__node_type[__get_type(sel)].handler(L, sel) == -1) {
         lua_pushnil(L);
-        lua_pushstring(L, "extract error");
+        lua_pushstring(L, __get_error(sel, "extract error"));
         return 2;
     }
 
@@ -523,7 +610,7 @@ xpath_selector_gc(lua_State *L)
 
     sel = (xpath_selector_t *) lua_touserdata(L, 1);
 
-    __selector_dump(sel, "gc");
+    __dump_selector(sel, "gc");
 
     /* TODO release resource of current node */
 
@@ -614,6 +701,8 @@ create_metatable(lua_State *L)
 int
 luaopen_xpath(lua_State *L)
 {
+    __library_init();
+
     luaL_register(L, LUA_XPATH_NAME, funcs);
 
     create_metatable(L);
