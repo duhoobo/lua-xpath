@@ -4,7 +4,6 @@
 
 #define LUA_XPATH_NAME          "xpath"
 #define LUA_XPATH_MT_NAME       "xpath_mt"
-#define LUA_XPATH_MAGIC         0x6870786C      /* "lxph" */
 
 
 typedef struct xpath_selector_s {
@@ -247,7 +246,7 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *xpath)
 
         /* let lua release this block after using */
         nodes = (void **) lua_newuserdata(L, 
-            result->nodesetval->nodeNr * sizeof(*nodes));
+            result->nodesetval->nodeNr * sizeof(*nodes)); /* FIXME memory insufficient */
 
         for (i = 0; i < result->nodesetval->nodeNr; i++) {
             xmlNode *node = result->nodesetval->nodeTab[i];
@@ -347,7 +346,7 @@ __extract_attribute_node(lua_State *L, xpath_selector_t *sel)
      * string connot contain embedded zeros; it is assumed to end at the frist
      * zero.
      */
-    lua_pushstring(L, (char const *) value);
+    lua_pushstring(L, (char const *) value); /* FIXME memory insufficient */
 
     xmlFree(value);
 
@@ -386,11 +385,9 @@ xpath_loads(lua_State *L)
         return 2;
     }
 
-    /* FIXME it never fail on memory insufficient ? */
-    sel = (xpath_selector_t *) lua_newuserdata(L, sizeof(*sel));
+    sel = (xpath_selector_t *) lua_newuserdata(L, sizeof(*sel)); /* FIXME memory insufficient */
 
     /* fields initialization */
-    sel->magic = LUA_XPATH_MAGIC;
     sel->root = NULL;
     sel->ref = 0;
     sel->count = 0;
@@ -467,18 +464,7 @@ xpath_eval_xpath(lua_State *L)
     xpath_selector_t *sel, *node;
 
 
-    if (!lua_isuserdata(L, 1)) {
-        lua_pushnil(L);
-        lua_pushstring(L, "first arg should be selector object");
-        return 2;
-    }
-
-    sel = (xpath_selector_t *) lua_touserdata(L, 1);
-    if (sel->magic != LUA_XPATH_MAGIC) {
-        lua_pushnil(L);
-        lua_pushstring(L, "selector object needed");
-        return 2;
-    }
+    sel = (xpath_selector_t *) luaL_checkudata(L, 1, LUA_XPATH_MT_NAME);
 
     /* `lua_tolstring` returns a fully aligned pointer to a string inside the
      * Lua state. This string always has a zero ('\0') after its last character
@@ -507,14 +493,12 @@ xpath_eval_xpath(lua_State *L)
         /* note lua table's base index */
         lua_pushinteger(L, i + 1);
 
-        /* FIXME it never fail on memory insufficient ? */
-        node = lua_newuserdata(L, sizeof(*node));
+        node = lua_newuserdata(L, sizeof(*node)); /* FIXME, memory insufficient */
 
         /* set metatable for new selector object */
         luaL_newmetatable(L, LUA_XPATH_MT_NAME);
         lua_setmetatable(L, -2);
 
-        node->magic = LUA_XPATH_MAGIC;
         node->root = __get_root(sel);
         node->ref = 0;
         node->count = 0;
@@ -554,18 +538,7 @@ xpath_extract(lua_State *L)
     xpath_selector_t *sel;
 
 
-    if (!lua_isuserdata(L, 1)) {
-        lua_pushnil(L);
-        lua_pushstring(L, "first arg should be selector object");
-        return 2;
-    }
-
-    sel = (xpath_selector_t *) lua_touserdata(L, 1);
-    if (sel->magic != LUA_XPATH_MAGIC) {
-        lua_pushnil(L);
-        lua_pushstring(L, "selector object needed");
-        return 2;
-    }
+    sel = (xpath_selector_t *) luaL_checkudata(L, 1, LUA_XPATH_MT_NAME);
 
     __dump_selector(sel, NULL);
 
@@ -601,6 +574,34 @@ xpath_extract(lua_State *L)
  *   are called in _reverse order_ of their creation, among those collected in
  *   that cycle. The userdata itself is freed only in the next
  *   garbage-collection cycle.
+ *
+ *
+ *  from manual of Lua 5.1 (Chapter 3.6 - Error Hanlding in C)
+ *
+ * Internally, Lua uses the C `longjump` facility to handle errors. When Lua
+ * faces any error (such as memory allocation errors, type errors, syntax
+ * errors, and runtime errors) it _raises_ an error; that is it does a long
+ * jump. A _protected environment_ uses `setjump` to set a recover point; any
+ * error jumps to the most recent active recover point.
+ *
+ * Most functions in API can throw an error, for instance due to memory
+ * allocation error. The document for each function indicates whether it can
+ * throw errors.
+ *
+ * Inside a C function you can throw an error by calling `lua_error`.
+ *
+ *
+ *  from PIL for Lua 5.1 (p.243)
+ *
+ * (In extreme conditions, this implementation of `l_dir` may cause a small
+ * memory leak. Three of the Lua functions that it calls can fail due to
+ * insufficient memory: `lua_newtable`, `lua_pushstring`, and `lua_settable`. If
+ * any of these functions fails, it will raise an error and interrupt `l_dir`,
+ * which therefore will not call `closedir`. As we discussed earlier, on many
+ * programs this is not a big problem: if the program runs out of memory, the
+ * best it can do is to shut down anyway. Nevertheless, in Chapter 29 we will
+ * see an alternative implementation for a directory function that avoids this
+ * problem.)
  */
 static int
 xpath_selector_gc(lua_State *L)
