@@ -7,7 +7,6 @@
 
 
 typedef struct xpath_selector_s {
-    intptr_t                    magic;
     struct xpath_selector_s     *root;
     int                         ref;    /* lua reference, _root_ keeps it */
     int                         count;  /* refcount, _root_ keeps it */

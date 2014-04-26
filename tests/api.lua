@@ -34,7 +34,7 @@ function test_xpath()
     end
 
     for k, v in pairs(ls) do
-        print(k, v)
+        print(k, v, v:extract())
     end
 
     print "\n--- leave test_xpath ---"
@@ -213,13 +213,13 @@ function test_error()
 end
 
 
---test_xpath()
+test_xpath()
 --test_relative_xpath()
 --test_re()
 --test_css()
 --test_tostring()
 --test_extract()
-test_error()
+--test_error()
 
 
 
