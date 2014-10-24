@@ -42,16 +42,13 @@ Examples
 Installation
 ------------
 
-* To install without lua rocks
+* To install from source
 
-        ./configure --libdir=/usr/local/lib/lua/5.1 --datadir=/usr/local/share/lua$
-        make; make install
+        ./configure --libdir=/usr/local/lib/lua/5.1 --datadir=/usr/local/share/lua/5.1
+        make
+        make install
 
-* To install with luarocks from repo
-
-        luarocks install lua-xpath
-
-* To install with luarocks from source
+* To install from source with luarocks
 
         luarocks build rockspec/lua-xpath-<version>.rockspec
 
