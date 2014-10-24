@@ -1,12 +1,14 @@
 lua-xpath
 =========
 
+
 A Lua XPath library based on libxml2. It provides easy-to-use APIs inspired
 by [Scrapy](http://www.scrapy.org/)'s selector classes.
 
 
-example
--------
+
+Examples
+--------
 
     local xpath = require("xpath")
 
@@ -36,8 +38,9 @@ example
     end
 
 
-install
--------
+
+Installation
+------------
 
 * To install without lua rocks
 
@@ -51,7 +54,7 @@ install
 * To install with luarocks from source
 
         luarocks build rockspec/lua-xpath-<version>.rockspec
-        
+
 
 
 

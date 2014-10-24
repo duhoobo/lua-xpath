@@ -214,12 +214,19 @@ end
 
 
 test_xpath()
---test_relative_xpath()
---test_re()
---test_css()
---test_tostring()
---test_extract()
---test_error()
+test_relative_xpath()
+test_re()
+test_css()
+test_tostring()
+test_extract()
+test_error()
+
+collectgarbage("collect")
+collectgarbage("collect")
+collectgarbage("collect")
+collectgarbage("collect")
+
+io.stdin:read("*l")
 
 
 
