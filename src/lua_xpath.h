@@ -7,6 +7,8 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/parserInternals.h>
+#include <libxml/xpathInternals.h>
+
 
 #include <stdint.h>
 

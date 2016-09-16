@@ -5,6 +5,7 @@
 #define LUA_XPATH_NAME          "xpath"
 #define LUA_XPATH_MT_NAME       "xpath_mt"
 
+#define MAX_XPATH_PREFIX_NUM 20
 
 typedef struct xpath_selector_s {
     struct xpath_selector_s     *root;
@@ -204,11 +205,13 @@ __parse_file(xpath_selector_t *sel, char const *fname)
 
 
 static void **
-__eval_xpath(lua_State *L, xpath_selector_t *sel, char const *xpath)
+__eval_xpath(lua_State *L, xpath_selector_t *sel, char const *xpath, const xmlChar * nsList[])
 {
     int i;
     xmlXPathObject *result = NULL;
     xmlXPathContext *ctxt = NULL; 
+    const xmlChar* prefix = NULL;
+    const xmlChar* href = NULL;
     void **nodes = NULL;
     
 
@@ -221,6 +224,14 @@ __eval_xpath(lua_State *L, xpath_selector_t *sel, char const *xpath)
         if (ctxt == NULL) {
             __set_error(sel, NULL, "create xpath context error");
             break;
+        }
+
+        for (i = 0 ; prefix = nsList[i++];) {
+            if ((href = nsList[i])
+                    && (xmlXPathRegisterNs(ctxt, prefix, href) != 0)) {
+                __set_error(sel, NULL, "add namespace to xpath context error");
+                break;
+            }
         }
 
         /* the current node */
@@ -460,6 +471,7 @@ xpath_eval_xpath(lua_State *L)
     size_t length;
     void **nodes;
     const char *xpath;
+    const xmlChar* nsList[MAX_XPATH_PREFIX_NUM];
     xpath_selector_t *sel, *node;
 
 
@@ -477,8 +489,29 @@ xpath_eval_xpath(lua_State *L)
         lua_pushstring(L, "xpath pattern needed");
         return 2;
     }
+    {
+        int n, top = lua_gettop(L);
+        i = 1;
+        if (top > 2) { //optionally prefix/href array for xpath
+            if (lua_type(L, 3) != LUA_TTABLE) {
+                lua_pushnil(L);
+                lua_pushstring(L, "prefix/href array is expected");
+                return 2;
+            }
+            if ((n = luaL_getn(L, 3)) > MAX_XPATH_PREFIX_NUM) {
+                lua_pushnil(L);
+                lua_pushstring(L, "too much prefixes");
+                return 2;
+            }
+            for (; i <= n; i++) {
+                lua_rawgeti(L, 3, i);
+                nsList[i - 1] = luaL_optlstring(L, -1, NULL, &length);
+            }
+        }
+        nsList[i - 1] = 0;
+    }
 
-    nodes = (void **) __eval_xpath(L, sel, xpath);
+    nodes = (void **) __eval_xpath(L, sel, xpath, nsList);
     if (nodes == NULL) {
         lua_pushnil(L);
         lua_pushstring(L, __get_error(sel, "eval xpath error"));

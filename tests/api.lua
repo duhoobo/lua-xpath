@@ -1,4 +1,4 @@
-package.cpath = "/home/duhoobo/prj/amateur/lua-xpath/src/?.so;" .. package.cpath
+package.cpath = "/home/akh/local/lua-xpath/src/?.so;" .. package.cpath
 
 local xpath = require("xpath")
 
@@ -12,6 +12,17 @@ xml = [[
     <sex>male</sex>
 </body>
 </html>]]
+xmlns = [[
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:message="http://org.mycomp">
+   <soapenv:Header/>
+      <soapenv:Body>
+      <message:SomeMessage>
+        <message:SomeField>4</message:SomeField>
+      </message:SomeMessage>
+   </soapenv:Body>
+</soapenv:Envelope>
+]]
+
 
 
 function test_xpath()
@@ -38,6 +49,33 @@ function test_xpath()
     end
 
     print "\n--- leave test_xpath ---"
+end
+
+function test_xpath_with_ns()
+    print "--- enter test_xpath_with_ns ---\n"
+
+    local sel, err = xpath.loads(xmlns)
+
+    if not sel then
+        print(sel, err)
+        return
+    end
+
+    print(sel)
+
+    local ls, err = sel:xpath("/soap:Envelope/soap:Body//message:SomeField[text()=4]",
+    {"soap", "http://schemas.xmlsoap.org/soap/envelope/", "message", "http://org.mycomp"})
+
+    if not ls then
+        print(ls, err)
+        return
+    end
+
+    for k, v in pairs(ls) do
+        print(k, v, v:extract())
+    end
+
+    print "\n--- leave test_xpath_with_ns ---"
 end
 
 
@@ -214,6 +252,7 @@ end
 
 
 test_xpath()
+test_xpath_with_ns()
 test_relative_xpath()
 test_re()
 test_css()
